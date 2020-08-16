@@ -5,6 +5,7 @@ authors = ["Daniel May <daniel.may@mailbox.org>"]
 edition = "2018"
 
 [dependencies]
+app_dirs2 = "2.3"
 notify = "4.0"
 anyhow = "1.0"
 structopt = "0.3"
