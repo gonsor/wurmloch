@@ -9,3 +9,5 @@ app_dirs2 = "2.3"
 notify = "4.0"
 anyhow = "1.0"
 structopt = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"

@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use app_dirs2::{get_app_root, AppDataType, AppInfo};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Deserialize;
 use structopt::StructOpt;
 
 const RULES_FILE_NAME: &str = "rules.yaml";
@@ -20,10 +21,16 @@ struct Opt {
     watch_delay: u64,
 }
 
+#[derive(Debug, Deserialize)]
+struct Rule {
+    pattern: String,
+    destination: String,
+}
+
 fn main() -> Result<()> {
     let opt = Opt::from_args();
 
-    setup_path()?;
+    let rules = parse_rules()?;
 
     let (tx, rx) = channel();
 
@@ -43,11 +50,9 @@ fn main() -> Result<()> {
             Err(e) => eprintln!("{}", e),
         }
     }
-
-    Ok(())
 }
 
-fn setup_path() -> Result<()> {
+fn parse_rules() -> Result<Vec<Rule>> {
     let dir = get_app_root(
         AppDataType::UserConfig,
         &AppInfo {
@@ -59,8 +64,15 @@ fn setup_path() -> Result<()> {
         "Could not create configuration directory '{:#?}'.",
         &dir
     ))?;
+    let rules_path = dir.join(RULES_FILE_NAME);
 
-    //let rules = dir.join(RULES_FILE_NAME);
+    let contents = fs::read_to_string(&rules_path).context(format!(
+        "Failed to read rule configuration file at '{:#?}'.",
+        &rules_path
+    ))?;
 
-    Ok(())
+    let rules: Vec<Rule> =
+        serde_yaml::from_str(&contents).context("Failed to parse rule configuration.")?;
+
+    Ok(rules)
 }
