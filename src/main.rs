@@ -25,13 +25,13 @@ struct Opt {
 #[derive(Debug, Deserialize)]
 struct YAMLRule {
     pattern: String,
-    target: String,
+    target: PathBuf,
 }
 
 #[derive(Debug)]
 struct Rule {
     pattern: Glob,
-    target: String,
+    target: PathBuf,
 }
 
 impl From<YAMLRule> for Rule {
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn parse_rules() -> Result<(Vec<Rule>)> {
+fn parse_rules() -> Result<Vec<Rule>> {
     let dir = get_app_root(
         AppDataType::UserConfig,
         &AppInfo {
@@ -88,6 +88,8 @@ fn parse_rules() -> Result<(Vec<Rule>)> {
     let rules: Vec<YAMLRule> =
         serde_yaml::from_str(&contents).context("Failed to parse rule configuration.")?;
     let rules: Vec<Rule> = rules.into_iter().map(|y| y.into()).collect();
+
+    println!("{:#?}", rules);
 
     Ok(rules)
 }
