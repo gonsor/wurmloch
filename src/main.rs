@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use app_dirs2::{get_app_root, AppDataType, AppInfo};
-use globset::Glob;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use globset::{Glob, GlobMatcher};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher, DebouncedEvent};
 use serde::Deserialize;
 use structopt::StructOpt;
 
@@ -30,14 +30,14 @@ struct YAMLRule {
 
 #[derive(Debug)]
 struct Rule {
-    pattern: Glob,
+    pattern: GlobMatcher,
     target: PathBuf,
 }
 
 impl From<YAMLRule> for Rule {
     fn from(yaml: YAMLRule) -> Self {
         Self {
-            pattern: Glob::new(&yaml.pattern).unwrap(),
+            pattern: Glob::new(&yaml.pattern).unwrap().compile_matcher(),
             target: yaml.target.clone(),
         }
     }
@@ -60,10 +60,25 @@ fn main() -> Result<()> {
 
     loop {
         match rx.recv() {
-            Ok(event) => println!("XD"),
+            Ok(event) => handle_event(&rules, &event)?,
             Err(e) => eprintln!("{}", e),
         }
     }
+}
+
+fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
+    if let DebouncedEvent::Create(path) = event {
+        for rule in rules.iter() {
+            if rule.pattern.is_match(&path) {
+                // TODO: Log when something goes wrong
+                fs::rename(&path, &rule.target)?;
+                // TODO: Log all following rules that would have also matched
+                return Ok(());
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn parse_rules() -> Result<Vec<Rule>> {
@@ -88,8 +103,6 @@ fn parse_rules() -> Result<Vec<Rule>> {
     let rules: Vec<YAMLRule> =
         serde_yaml::from_str(&contents).context("Failed to parse rule configuration.")?;
     let rules: Vec<Rule> = rules.into_iter().map(|y| y.into()).collect();
-
-    println!("{:#?}", rules);
 
     Ok(rules)
 }
