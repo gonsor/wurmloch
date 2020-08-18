@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use app_dirs2::{get_app_root, AppDataType, AppInfo};
+use globset::Glob;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use structopt::StructOpt;
@@ -22,16 +23,29 @@ struct Opt {
 }
 
 #[derive(Debug, Deserialize)]
-struct Rule {
+struct YAMLRule {
     pattern: String,
-    destination: String,
+    target: String,
+}
+
+#[derive(Debug)]
+struct Rule {
+    pattern: Glob,
+    target: String,
+}
+
+impl From<YAMLRule> for Rule {
+    fn from(yaml: YAMLRule) -> Self {
+        Self {
+            pattern: Glob::new(&yaml.pattern).unwrap(),
+            target: yaml.target.clone(),
+        }
+    }
 }
 
 fn main() -> Result<()> {
     let opt = Opt::from_args();
-
     let rules = parse_rules()?;
-
     let (tx, rx) = channel();
 
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(opt.watch_delay))
@@ -52,7 +66,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn parse_rules() -> Result<Vec<Rule>> {
+fn parse_rules() -> Result<(Vec<Rule>)> {
     let dir = get_app_root(
         AppDataType::UserConfig,
         &AppInfo {
@@ -71,8 +85,9 @@ fn parse_rules() -> Result<Vec<Rule>> {
         &rules_path
     ))?;
 
-    let rules: Vec<Rule> =
+    let rules: Vec<YAMLRule> =
         serde_yaml::from_str(&contents).context("Failed to parse rule configuration.")?;
+    let rules: Vec<Rule> = rules.into_iter().map(|y| y.into()).collect();
 
     Ok(rules)
 }
