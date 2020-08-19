@@ -71,7 +71,10 @@ fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
         for rule in rules.iter() {
             if rule.pattern.is_match(&path) {
                 // TODO: Log when something goes wrong
-                fs::rename(&path, &rule.target)?;
+                println!("From {:?} to {:?}", &path, &rule.target);
+                if let Some(filename) = path.file_name() {
+                    fs::rename(&path, &rule.target.join(filename))?;
+                }
                 // TODO: Log all following rules that would have also matched
                 return Ok(());
             }
