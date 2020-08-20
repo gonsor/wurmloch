@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
@@ -6,7 +9,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use app_dirs2::{get_app_root, AppDataType, AppInfo};
 use globset::{Glob, GlobMatcher};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, DebouncedEvent};
+use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use structopt::StructOpt;
 
@@ -44,6 +47,7 @@ impl From<YAMLRule> for Rule {
 }
 
 fn main() -> Result<()> {
+    setup_logging();
     let opt = Opt::from_args();
     let rules = parse_rules()?;
     let (tx, rx) = channel();
@@ -58,29 +62,58 @@ fn main() -> Result<()> {
             &opt.watch_dir
         ))?;
 
+    info!("Start watching...");
+
     loop {
         match rx.recv() {
             Ok(event) => handle_event(&rules, &event)?,
-            Err(e) => eprintln!("{}", e),
+            Err(e) => error!("{}", e),
         }
     }
 }
 
+fn setup_logging() {
+    // change default log level
+    // TODO: use custom environment variable
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    pretty_env_logger::init();
+}
+
 fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
     if let DebouncedEvent::Create(path) = event {
+        let mut rule_found = false;
         for rule in rules.iter() {
             if rule.pattern.is_match(&path) {
-                // TODO: Log when something goes wrong
-                println!("From {:?} to {:?}", &path, &rule.target);
-                if let Some(filename) = path.file_name() {
-                    fs::rename(&path, &rule.target.join(filename))?;
+                if !rule_found {
+                    // First rule match = highest priority match. Apply rule.
+                    if let Some(filename) = path.file_name() {
+                        info!("Rule '{}' matched.", &rule.pattern.glob().to_string());
+                        match fs::rename(&path, &rule.target.join(filename)) {
+                            Ok(_) => {
+                                info!("Moved '{:?}' to '{:?}'.", &path, &rule.target);
+                                rule_found = true;
+                            }
+                            Err(e) => {
+                                error!("Could not move '{:?}' to '{:?}'.", &path, &rule.target);
+                                error!("Reason: {}'.", e);
+                            }
+                        }
+                    }
+                } else {
+                    // Consecutive rule matches are ignored
+                    info!(
+                        "Rule '{}' would have also matched but has lower priority.",
+                        &rule.pattern.glob().to_string()
+                    );
                 }
-                // TODO: Log all following rules that would have also matched
-                return Ok(());
             }
         }
+        if !rule_found {
+            warn!("No rule found for file '{:?}'. Ignored.", &path);
+        }
     }
-
     Ok(())
 }
 
@@ -106,6 +139,8 @@ fn parse_rules() -> Result<Vec<Rule>> {
     let rules: Vec<YAMLRule> =
         serde_yaml::from_str(&contents).context("Failed to parse rule configuration.")?;
     let rules: Vec<Rule> = rules.into_iter().map(|y| y.into()).collect();
+
+    info!("Successfully parsed {} rules.", rules.len());
 
     Ok(rules)
 }
