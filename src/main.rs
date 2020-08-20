@@ -58,7 +58,7 @@ fn main() -> Result<()> {
     watcher
         .watch(&opt.watch_dir, RecursiveMode::Recursive)
         .context(format!(
-            "Could not watch directory '{:#?}'.",
+            "Could not watch directory {:#?}.",
             &opt.watch_dir
         ))?;
 
@@ -83,35 +83,36 @@ fn setup_logging() {
 
 fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
     if let DebouncedEvent::Create(path) = event {
-        let mut rule_found = false;
-        for rule in rules.iter() {
-            if rule.pattern.is_match(&path) {
-                if !rule_found {
-                    // First rule match = highest priority match. Apply rule.
-                    if let Some(filename) = path.file_name() {
-                        info!("Rule '{}' matched.", &rule.pattern.glob().to_string());
+        if let Some(filename) = path.file_name() {
+            info!("Processing {:?}.", filename);
+            let mut rule_found = false;
+            for rule in rules.iter() {
+                if rule.pattern.is_match(filename) {
+                    if !rule_found {
+                        // First rule match = highest priority match. Apply rule.
+                        info!("  Rule {} matched.", &rule.pattern.glob().to_string());
                         match fs::rename(&path, &rule.target.join(filename)) {
                             Ok(_) => {
-                                info!("Moved '{:?}' to '{:?}'.", &path, &rule.target);
+                                info!("    Moved {:?} to {:?}.", filename, &rule.target);
                                 rule_found = true;
                             }
                             Err(e) => {
-                                error!("Could not move '{:?}' to '{:?}'.", &path, &rule.target);
-                                error!("Reason: {}'.", e);
+                                error!("    Could not move {:?} to {:?}.", filename, &rule.target);
+                                error!("    Reason: {}.", e);
                             }
                         }
+                    } else {
+                        // Consecutive rule matches are ignored
+                        info!(
+                            "  Rule '{}' would have also matched but has lower priority.",
+                            &rule.pattern.glob().to_string()
+                        );
                     }
-                } else {
-                    // Consecutive rule matches are ignored
-                    info!(
-                        "Rule '{}' would have also matched but has lower priority.",
-                        &rule.pattern.glob().to_string()
-                    );
                 }
             }
-        }
-        if !rule_found {
-            warn!("No rule found for file '{:?}'. Ignored.", &path);
+            if !rule_found {
+                warn!("No rule found for file {:?}. Ignored.", filename);
+            }
         }
     }
     Ok(())
@@ -126,13 +127,13 @@ fn parse_rules() -> Result<Vec<Rule>> {
         },
     )?;
     fs::create_dir_all(&dir).context(format!(
-        "Could not create configuration directory '{:#?}'.",
+        "Could not create configuration directory {:#?}.",
         &dir
     ))?;
     let rules_path = dir.join(RULES_FILE_NAME);
 
     let contents = fs::read_to_string(&rules_path).context(format!(
-        "Failed to read rule configuration file at '{:#?}'.",
+        "Failed to read rule configuration file at {:#?}.",
         &rules_path
     ))?;
 
