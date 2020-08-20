@@ -62,7 +62,7 @@ fn main() -> Result<()> {
             &opt.watch_dir
         ))?;
 
-    info!("Start watching...");
+    info!("Watching {:?} ...", &opt.watch_dir);
 
     loop {
         match rx.recv() {
