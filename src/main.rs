@@ -75,35 +75,35 @@ fn main() -> Result<()> {
 fn setup_logging() {
     // change default log level
     // TODO: use custom environment variable
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
+    //if std::env::var("RUST_LOG").is_err() {
+    //    std::env::set_var("RUST_LOG", "info");
+    //}
     pretty_env_logger::init();
 }
 
 fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
     if let DebouncedEvent::Create(path) = event {
         if let Some(filename) = path.file_name() {
-            info!("Processing {:?}.", filename);
+            debug!("Processing {:?}.", filename);
             let mut rule_found = false;
             for rule in rules.iter() {
                 if rule.pattern.is_match(filename) {
                     if !rule_found {
                         // First rule match = highest priority match. Apply rule.
-                        info!("  Rule {} matched.", &rule.pattern.glob().to_string());
+                        debug!("  Rule {} matched.", &rule.pattern.glob().to_string());
                         match fs::rename(&path, &rule.target.join(filename)) {
                             Ok(_) => {
-                                info!("    Moved {:?} to {:?}.", filename, &rule.target);
+                                debug!("    Moved {:?} to {:?}.", filename, &rule.target);
                                 rule_found = true;
                             }
                             Err(e) => {
-                                error!("    Could not move {:?} to {:?}.", filename, &rule.target);
-                                error!("    Reason: {}.", e);
+                                error!("Could not move {:?} to {:?}.", filename, &rule.target);
+                                error!("Reason: {}.", e);
                             }
                         }
                     } else {
                         // Consecutive rule matches are ignored
-                        info!(
+                        debug!(
                             "  Rule '{}' would have also matched but has lower priority.",
                             &rule.pattern.glob().to_string()
                         );
