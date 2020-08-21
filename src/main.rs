@@ -18,10 +18,10 @@ const RULES_FILE_NAME: &str = "rules.yaml";
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Wormhole")]
 struct Opt {
-    #[structopt(short, long, required = true, parse(from_os_str))]
+    #[structopt(name = "WATCH_DIR", required = true, parse(from_os_str))]
     watch_dir: PathBuf,
 
-    #[structopt(short = "e", long, default_value = "2")]
+    #[structopt(short, long, default_value = "2")]
     watch_delay: u64,
 }
 
