@@ -3,8 +3,8 @@ extern crate log;
 
 use std::fs;
 use std::io::prelude::Write;
-use std::path::PathBuf;
-use std::sync::mpsc::channel;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, Sender};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -60,18 +60,14 @@ struct Rule {
 fn main() -> Result<()> {
     pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME));
     let opt = Opt::from_args();
-    let config = load_or_create_config()?;
+    let (config_path, config) = load_or_create_config()?;
     let rules = parse_rules(&config)?;
     let (tx, rx) = channel();
 
-    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(opt.watch_delay))
-        .context("Could not initialize file watcher for this platform.")?;
-
-    watcher
-        .watch(&opt.watch_dir, RecursiveMode::Recursive)
-        .context(format!("Could not watch directory {:#?}.", &opt.watch_dir))?;
-
-    info!("Watching {:?} ...", &opt.watch_dir);
+    // Start watching
+    let watch_delay = Duration::from_secs(opt.watch_delay);
+    let _conf_watcher = watch(Sender::clone(&tx), &config_path, watch_delay);
+    let _dir_watcher = watch(tx, &opt.watch_dir, watch_delay);
 
     loop {
         match rx.recv() {
@@ -81,7 +77,25 @@ fn main() -> Result<()> {
     }
 }
 
+fn watch(
+    tx: Sender<DebouncedEvent>,
+    path: &Path,
+    watch_delay: Duration,
+) -> Result<RecommendedWatcher> {
+    
+    let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)
+        .context("Could not initialize file watcher for this platform.")?;
+
+    watcher
+        .watch(path, RecursiveMode::Recursive)
+        .context(format!("Could not watch {:#?}.", path))?;
+
+    info!("Watching {:?} ...", path);
+    Ok(watcher)
+}
+
 fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
+    println!("{:#?}", event);
     if let DebouncedEvent::Create(path) = event {
         if let Some(filename) = path.file_name() {
             debug!(" --- Processing {:?} --- ", filename);
@@ -118,7 +132,7 @@ fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
     Ok(())
 }
 
-fn load_or_create_config() -> Result<String> {
+fn load_or_create_config() -> Result<(PathBuf, String)> {
     let config: String;
 
     // ensure that the config directory exists
@@ -149,7 +163,7 @@ fn load_or_create_config() -> Result<String> {
         info!("Found existing configuration {:?}.", &rule_path);
     }
 
-    Ok(config)
+    Ok((rule_path, config))
 }
 
 fn parse_rules(config: &str) -> Result<Vec<Rule>> {
