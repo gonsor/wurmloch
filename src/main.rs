@@ -2,21 +2,22 @@
 extern crate log;
 
 use std::fs;
+use std::io::prelude::Write;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use app_dirs2::{get_app_root, AppDataType, AppInfo};
 use globset::{Glob, GlobMatcher};
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
+const APP_NAME: &str = "Wormhole";
 const RULES_FILE_NAME: &str = "rules.yaml";
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "Wormhole")]
+#[structopt(name = APP_NAME)]
 struct Opt {
     #[structopt(name = "WATCH_DIR", required = true, parse(from_os_str))]
     watch_dir: PathBuf,
@@ -25,10 +26,29 @@ struct Opt {
     watch_delay: u64,
 }
 
-#[derive(Debug, Deserialize)]
-struct YAMLRule {
+#[derive(Debug, Serialize, Deserialize)]
+struct ConfigRule {
     pattern: String,
     target: PathBuf,
+}
+
+impl ConfigRule {
+    fn examples() -> [ConfigRule; 3] {
+        [
+            ConfigRule {
+                pattern: String::from("*.jpg"),
+                target: dirs::picture_dir().unwrap_or_default(),
+            },
+            ConfigRule {
+                pattern: String::from("*.pdf"),
+                target: dirs::document_dir().unwrap_or_default(),
+            },
+            ConfigRule {
+                pattern: String::from("*.mp3"),
+                target: dirs::audio_dir().unwrap_or_default(),
+            },
+        ]
+    }
 }
 
 #[derive(Debug)]
@@ -37,8 +57,8 @@ struct Rule {
     target: PathBuf,
 }
 
-impl From<YAMLRule> for Rule {
-    fn from(yaml: YAMLRule) -> Self {
+impl From<ConfigRule> for Rule {
+    fn from(yaml: ConfigRule) -> Self {
         Self {
             pattern: Glob::new(&yaml.pattern).unwrap().compile_matcher(),
             target: yaml.target.clone(),
@@ -49,7 +69,8 @@ impl From<YAMLRule> for Rule {
 fn main() -> Result<()> {
     setup_logging();
     let opt = Opt::from_args();
-    let rules = parse_rules()?;
+    let config = load_or_create_config()?;
+    let rules = parse_rules(&config)?;
     let (tx, rx) = channel();
 
     let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(opt.watch_delay))
@@ -57,10 +78,7 @@ fn main() -> Result<()> {
 
     watcher
         .watch(&opt.watch_dir, RecursiveMode::Recursive)
-        .context(format!(
-            "Could not watch directory {:#?}.",
-            &opt.watch_dir
-        ))?;
+        .context(format!("Could not watch directory {:#?}.", &opt.watch_dir))?;
 
     info!("Watching {:?} ...", &opt.watch_dir);
 
@@ -118,27 +136,43 @@ fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
     Ok(())
 }
 
-fn parse_rules() -> Result<Vec<Rule>> {
-    let dir = get_app_root(
-        AppDataType::UserConfig,
-        &AppInfo {
-            name: "Wormhole",
-            author: "May",
-        },
-    )?;
-    fs::create_dir_all(&dir).context(format!(
-        "Could not create configuration directory {:#?}.",
-        &dir
-    ))?;
-    let rules_path = dir.join(RULES_FILE_NAME);
+fn load_or_create_config() -> Result<String> {
+    let config: String;
 
-    let contents = fs::read_to_string(&rules_path).context(format!(
-        "Failed to read rule configuration file at {:#?}.",
-        &rules_path
+    // ensure that the config directory exists
+    let config_dir = dirs::config_dir().context("Could not determine configuration directory.")?;
+    let app_dir = config_dir.join(APP_NAME);
+    fs::create_dir_all(&app_dir).context(format!(
+        "Could not create configuration directory {:?}.",
+        &app_dir
     ))?;
 
-    let rules: Vec<YAMLRule> =
-        serde_yaml::from_str(&contents).context("Failed to parse rule configuration.")?;
+    // ensure that a rule file exists
+    let rule_path = app_dir.join(RULES_FILE_NAME);
+    if !rule_path.exists() {
+        // no config file, create an example
+        let mut file = fs::File::create(&rule_path).context(format!(
+            "Could not create configuration file {:?}.",
+            &rule_path
+        ))?;
+        config = String::from(serde_yaml::to_string(&ConfigRule::examples()).unwrap());
+        file.write_all(config.as_bytes()).unwrap();
+        info!("Created example configuration {:?}.", &rule_path);
+    } else {
+        // use existing config
+        config = fs::read_to_string(&rule_path).context(format!(
+            "Could not read configuration file {:#?}.",
+            &rule_path
+        ))?;
+        info!("Found existing configuration {:?}.", &rule_path);
+    }
+
+    Ok(config)
+}
+
+fn parse_rules(config: &str) -> Result<Vec<Rule>> {
+    let rules: Vec<ConfigRule> =
+        serde_yaml::from_str(config).context("Failed to parse rule configuration.")?;
     let rules: Vec<Rule> = rules.into_iter().map(|y| y.into()).collect();
 
     info!("Successfully parsed {} rules.", rules.len());
