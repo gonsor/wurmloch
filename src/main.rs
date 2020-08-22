@@ -58,7 +58,7 @@ struct Rule {
 }
 
 fn main() -> Result<()> {
-    setup_logging();
+    pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME));
     let opt = Opt::from_args();
     let config = load_or_create_config()?;
     let rules = parse_rules(&config)?;
@@ -81,28 +81,19 @@ fn main() -> Result<()> {
     }
 }
 
-fn setup_logging() {
-    // change default log level
-    // TODO: use custom environment variable
-    //if std::env::var("RUST_LOG").is_err() {
-    //    std::env::set_var("RUST_LOG", "info");
-    //}
-    pretty_env_logger::init();
-}
-
 fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
     if let DebouncedEvent::Create(path) = event {
         if let Some(filename) = path.file_name() {
-            debug!("Processing {:?}.", filename);
+            debug!(" --- Processing {:?} --- ", filename);
             let mut rule_found = false;
             for rule in rules.iter() {
                 if rule.matcher.is_match(filename) {
                     if !rule_found {
                         // First rule match = highest priority match. Apply rule.
-                        debug!("  Rule {} matched.", &rule.matcher.glob().to_string());
+                        debug!("Rule {} matched.", &rule.matcher.glob().to_string());
                         match fs::rename(&path, &rule.target.join(filename)) {
                             Ok(_) => {
-                                debug!("    Moved {:?} to {:?}.", filename, &rule.target);
+                                debug!("Moved {:?} to {:?}.", filename, &rule.target);
                                 rule_found = true;
                             }
                             Err(e) => {
@@ -113,7 +104,7 @@ fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
                     } else {
                         // Consecutive rule matches are ignored
                         debug!(
-                            "  Rule '{}' would have also matched but has lower priority.",
+                            "Rule '{}' would have also matched but has lower priority.",
                             &rule.matcher.glob().to_string()
                         );
                     }
@@ -186,7 +177,7 @@ fn parse_rules(config: &str) -> Result<Vec<Rule>> {
                     // valid target
                     Some(Rule {
                         matcher: glob.compile_matcher(),
-                        target: r.target.clone(),
+                        target: r.target,
                     })
                 }
             }
