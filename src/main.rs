@@ -60,8 +60,9 @@ struct Rule {
 fn main() -> Result<()> {
     pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME));
     let opt = Opt::from_args();
+
     let (config_path, config) = load_or_create_config()?;
-    let rules = parse_rules(&config)?;
+    let mut rules = parse_rules(&config)?;
     let (tx, rx) = channel();
 
     // Start watching
@@ -71,7 +72,16 @@ fn main() -> Result<()> {
 
     loop {
         match rx.recv() {
-            Ok(event) => handle_event(&rules, &event)?,
+            Ok(event) => match event {
+                DebouncedEvent::Create(path) => handle_file(&rules, &path)?,
+                DebouncedEvent::Write(path) => {
+                    if path == config_path {
+                        // Configuration file changed
+                        rules = parse_rules(&fs::read_to_string(&path).unwrap())?;
+                    }
+                }
+                _ => trace!("Unhandled notify event: {:#?}.", event),
+            },
             Err(e) => error!("{}", e),
         }
     }
@@ -82,7 +92,6 @@ fn watch(
     path: &Path,
     watch_delay: Duration,
 ) -> Result<RecommendedWatcher> {
-    
     let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)
         .context("Could not initialize file watcher for this platform.")?;
 
@@ -94,39 +103,36 @@ fn watch(
     Ok(watcher)
 }
 
-fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
-    println!("{:#?}", event);
-    if let DebouncedEvent::Create(path) = event {
-        if let Some(filename) = path.file_name() {
-            debug!(" --- Processing {:?} --- ", filename);
-            let mut rule_found = false;
-            for rule in rules.iter() {
-                if rule.matcher.is_match(filename) {
-                    if !rule_found {
-                        // First rule match = highest priority match. Apply rule.
-                        debug!("Rule {} matched.", &rule.matcher.glob().to_string());
-                        match fs::rename(&path, &rule.target.join(filename)) {
-                            Ok(_) => {
-                                debug!("Moved {:?} to {:?}.", filename, &rule.target);
-                                rule_found = true;
-                            }
-                            Err(e) => {
-                                error!("Could not move {:?} to {:?}.", filename, &rule.target);
-                                error!("Reason: {}.", e);
-                            }
+fn handle_file(rules: &[Rule], path: &Path) -> Result<()> {
+    if let Some(filename) = path.file_name() {
+        debug!(" --- Processing {:?} --- ", filename);
+        let mut rule_found = false;
+        for rule in rules.iter() {
+            if rule.matcher.is_match(filename) {
+                if !rule_found {
+                    // First rule match = highest priority match. Apply rule.
+                    debug!("Rule {} matched.", &rule.matcher.glob().to_string());
+                    match fs::rename(&path, &rule.target.join(filename)) {
+                        Ok(_) => {
+                            debug!("Moved {:?} to {:?}.", filename, &rule.target);
+                            rule_found = true;
                         }
-                    } else {
-                        // Consecutive rule matches are ignored
-                        debug!(
-                            "Rule '{}' would have also matched but has lower priority.",
-                            &rule.matcher.glob().to_string()
-                        );
+                        Err(e) => {
+                            error!("Could not move {:?} to {:?}.", filename, &rule.target);
+                            error!("Reason: {}.", e);
+                        }
                     }
+                } else {
+                    // Consecutive rule matches are ignored
+                    debug!(
+                        "Rule '{}' would have also matched but has lower priority.",
+                        &rule.matcher.glob().to_string()
+                    );
                 }
             }
-            if !rule_found {
-                warn!("No rule found for file {:?}. Ignored.", filename);
-            }
+        }
+        if !rule_found {
+            warn!("No rule found for file {:?}. Ignored.", filename);
         }
     }
     Ok(())
