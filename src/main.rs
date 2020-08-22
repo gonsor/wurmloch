@@ -53,17 +53,8 @@ impl ConfigRule {
 
 #[derive(Debug)]
 struct Rule {
-    pattern: GlobMatcher,
+    matcher: GlobMatcher,
     target: PathBuf,
-}
-
-impl From<ConfigRule> for Rule {
-    fn from(yaml: ConfigRule) -> Self {
-        Self {
-            pattern: Glob::new(&yaml.pattern).unwrap().compile_matcher(),
-            target: yaml.target.clone(),
-        }
-    }
 }
 
 fn main() -> Result<()> {
@@ -105,10 +96,10 @@ fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
             debug!("Processing {:?}.", filename);
             let mut rule_found = false;
             for rule in rules.iter() {
-                if rule.pattern.is_match(filename) {
+                if rule.matcher.is_match(filename) {
                     if !rule_found {
                         // First rule match = highest priority match. Apply rule.
-                        debug!("  Rule {} matched.", &rule.pattern.glob().to_string());
+                        debug!("  Rule {} matched.", &rule.matcher.glob().to_string());
                         match fs::rename(&path, &rule.target.join(filename)) {
                             Ok(_) => {
                                 debug!("    Moved {:?} to {:?}.", filename, &rule.target);
@@ -123,7 +114,7 @@ fn handle_event(rules: &[Rule], event: &DebouncedEvent) -> Result<()> {
                         // Consecutive rule matches are ignored
                         debug!(
                             "  Rule '{}' would have also matched but has lower priority.",
-                            &rule.pattern.glob().to_string()
+                            &rule.matcher.glob().to_string()
                         );
                     }
                 }
@@ -171,11 +162,44 @@ fn load_or_create_config() -> Result<String> {
 }
 
 fn parse_rules(config: &str) -> Result<Vec<Rule>> {
-    let rules: Vec<ConfigRule> =
+    let yaml: Vec<ConfigRule> =
         serde_yaml::from_str(config).context("Failed to parse rule configuration.")?;
-    let rules: Vec<Rule> = rules.into_iter().map(|y| y.into()).collect();
+
+    let rules: Vec<Rule> = yaml
+        .into_iter()
+        .filter_map(|r| match Glob::new(&r.pattern) {
+            Ok(glob) => {
+                // check for problems with this target
+                if r.target.is_relative() {
+                    error!(
+                        "Target {:?} is not an absolute path. Rule ignored.",
+                        &r.target
+                    );
+                    None
+                } else if !r.target.exists() {
+                    error!("Target {:?} does not exist. Rule ignored.", &r.target);
+                    None
+                } else if !r.target.is_dir() {
+                    error!("Target {:?} is not a directory. Rule ignored.", &r.target);
+                    None
+                } else {
+                    // valid target
+                    Some(Rule {
+                        matcher: glob.compile_matcher(),
+                        target: r.target.clone(),
+                    })
+                }
+            }
+            Err(e) => {
+                error!(
+                    "Pattern {} cannot be compiled. Rule ignored. Reason: {}.",
+                    &r.pattern, e
+                );
+                None
+            }
+        })
+        .collect();
 
     info!("Successfully parsed {} rules.", rules.len());
-
     Ok(rules)
 }
