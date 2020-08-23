@@ -61,7 +61,7 @@ struct Rule {
 }
 
 fn main() -> Result<()> {
-    pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME));
+    pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME.to_uppercase()));
     let opt = Opt::from_args();
 
     check_watch_directory(&opt.watch_dir)?;
