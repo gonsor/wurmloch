@@ -172,6 +172,20 @@ fn load_or_create_config() -> Result<(PathBuf, String)> {
     Ok((rule_path, config))
 }
 
+fn is_valid_target(path: &Path) -> bool {
+    if path.is_relative() {
+        error!("Target {:?} is not an absolute path. Rule ignored.", &path);
+        return false;
+    } else if !path.exists() {
+        error!("Target {:?} does not exist. Rule ignored.", &path);
+        return false;
+    } else if !path.is_dir() {
+        error!("Target {:?} is not a directory. Rule ignored.", &path);
+        return false;
+    }
+    true
+}
+
 fn parse_rules(config: &str) -> Result<Vec<Rule>> {
     let yaml: Vec<ConfigRule> =
         serde_yaml::from_str(config).context("Failed to parse rule configuration.")?;
@@ -180,25 +194,14 @@ fn parse_rules(config: &str) -> Result<Vec<Rule>> {
         .into_iter()
         .filter_map(|r| match Glob::new(&r.pattern) {
             Ok(glob) => {
-                // check for problems with this target
-                if r.target.is_relative() {
-                    error!(
-                        "Target {:?} is not an absolute path. Rule ignored.",
-                        &r.target
-                    );
-                    None
-                } else if !r.target.exists() {
-                    error!("Target {:?} does not exist. Rule ignored.", &r.target);
-                    None
-                } else if !r.target.is_dir() {
-                    error!("Target {:?} is not a directory. Rule ignored.", &r.target);
-                    None
-                } else {
+                if is_valid_target(&r.target) {
                     // valid target
                     Some(Rule {
                         matcher: glob.compile_matcher(),
                         target: r.target,
                     })
+                } else {
+                    None
                 }
             }
             Err(e) => {
