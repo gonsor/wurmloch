@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate anyhow;
+
 use std::fs;
 use std::io::prelude::Write;
 use std::path::{Path, PathBuf};
@@ -61,6 +64,8 @@ fn main() -> Result<()> {
     pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME));
     let opt = Opt::from_args();
 
+    check_watch_directory(&opt.watch_dir)?;
+
     let (config_path, config) = load_or_create_config()?;
     let mut rules = parse_rules(&config)?;
     let (tx, rx) = channel();
@@ -85,6 +90,20 @@ fn main() -> Result<()> {
             Err(e) => error!("{}", e),
         }
     }
+}
+
+fn check_watch_directory(path: &Path) -> Result<()> {
+    if path.is_relative() {
+        return Err(anyhow!(
+            "Watch directory {:?} must be an absolute path.",
+            path
+        ));
+    } else if !path.exists() {
+        return Err(anyhow!("Watch directory {:?} does not exist.", path));
+    } else if !path.is_dir() {
+        return Err(anyhow!("Watch directory {:?} is not a directory.", path));
+    }
+    Ok(())
 }
 
 fn watch(
