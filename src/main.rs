@@ -206,6 +206,8 @@ fn is_valid_target(path: &Path) -> bool {
 }
 
 fn parse_rules(config: &str) -> Result<Vec<Rule>> {
+    info!("Parsing rules ...");
+
     let yaml: Vec<ConfigRule> =
         serde_yaml::from_str(config).context("Failed to parse rule configuration.")?;
 
