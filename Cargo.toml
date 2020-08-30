@@ -1,9 +1,11 @@
 [package]
 name = "wurmloch"
-version = "1.0.0"
+version = "1.0.1"
 description = "Sort your filesystem by turning a folder into a wormhole"
 license = "MIT"
 authors = ["Daniel May <daniel.may@mailbox.org>"]
+repository = "https://github.com/gonsor/wurmloch"
+readme = "README.md"
 edition = "2018"
 
 [dependencies]
