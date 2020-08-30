@@ -16,7 +16,7 @@ use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-const APP_NAME: &str = "Wormhole";
+const APP_NAME: &str = "Wurmloch";
 const RULES_FILE_NAME: &str = "rules.yaml";
 
 #[derive(StructOpt, Debug)]

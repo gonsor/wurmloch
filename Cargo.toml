@@ -1,6 +1,6 @@
 [package]
-name = "wormhole"
-version = "0.1.0"
+name = "wurmloch"
+version = "1.0.0"
 authors = ["Daniel May <daniel.may@mailbox.org>"]
 edition = "2018"
 
