@@ -17,7 +17,7 @@ Works on Linux, Windows and Mac OS.
 
 ## Usage
  
-First, you create a new folder on your disk. Name it anything. Let's call it _Wurmloch_ here. You can turn this folder into a wormhole like this:
+First, you create a new folder on your disk. Name it anything. You can turn this folder into a wormhole like this:
 
 _Linux/Mac_
 
@@ -53,7 +53,7 @@ Open the rule file with any text editor. Some example rules are provided. Add al
 
 ## Troubeshooting
 
-If some rules are not considered, some behaviour is unexpected or the universe is crumbling, you can get more information by increasing the log level:
+If a rule is not not considered, some behaviour is unexpected or the universe is crumbling, you can get more information by increasing the log level:
 
 _Linux/Mac_
 
