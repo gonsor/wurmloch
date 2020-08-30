@@ -51,7 +51,7 @@ Open the rule file with any text editor. Some example rules are provided. Add al
 - If you save while the wurmloch program is already running, the file gets automatically reparsed.
 - If you made errors, they will appear in the logfile.
 
-## Troubeshooting
+## Troubleshooting
 
 If a rule is not not considered, some behaviour is unexpected or the universe is crumbling, you can get more information by increasing the log level:
 
