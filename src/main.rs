@@ -19,12 +19,15 @@ use structopt::StructOpt;
 const APP_NAME: &str = "Wurmloch";
 const RULES_FILE_NAME: &str = "rules.yaml";
 
+/// Sort your filesystem by turning a folder into a wormhole
 #[derive(StructOpt, Debug)]
 #[structopt(name = APP_NAME)]
 struct Opt {
+    /// This directory will be turned into a wormhole
     #[structopt(name = "WATCH_DIR", required = true, parse(from_os_str))]
     watch_dir: PathBuf,
 
+    /// React to file events after this delay (in seconds)
     #[structopt(short, long, default_value = "2")]
     watch_delay: u64,
 }
@@ -216,7 +219,6 @@ fn parse_rules(config: &str) -> Result<Vec<Rule>> {
         .filter_map(|r| match Glob::new(&r.pattern) {
             Ok(glob) => {
                 if is_valid_target(&r.target) {
-                    // valid target
                     Some(Rule {
                         matcher: glob.compile_matcher(),
                         target: r.target,
