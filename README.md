@@ -57,7 +57,7 @@ If a rule is not not considered, some behaviour is unexpected or the universe is
 
 _Linux/Mac_
 
-`WURMLOCH_LOG=debug`
+`export WURMLOCH_LOG=debug`
 
 _Windows_
 
