@@ -1,6 +1,6 @@
 [package]
 name = "wurmloch"
-version = "1.0.1"
+version = "1.0.2"
 description = "Sort your filesystem by turning a folder into a wormhole"
 license = "MIT"
 authors = ["Daniel May <daniel.may@mailbox.org>"]
