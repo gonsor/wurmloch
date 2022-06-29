@@ -11,24 +11,24 @@ use std::sync::mpsc::{channel, Sender};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use globset::{Glob, GlobMatcher};
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-use structopt::StructOpt;
 
 const APP_NAME: &str = "Wurmloch";
 const RULES_FILE_NAME: &str = "rules.yaml";
 
 /// Sort your filesystem by turning a folder into a wormhole
-#[derive(StructOpt, Debug)]
-#[structopt(name = APP_NAME)]
-struct Opt {
+#[derive(Parser, Debug)]
+#[clap(name = APP_NAME)]
+struct Args {
     /// This directory will be turned into a wormhole
-    #[structopt(name = "WATCH_DIR", required = true, parse(from_os_str))]
+    #[clap(name = "WATCH_DIR", required = true, parse(from_os_str))]
     watch_dir: PathBuf,
 
     /// React to file events after this delay (in seconds)
-    #[structopt(short, long, default_value = "2")]
+    #[clap(short, long, default_value = "2")]
     watch_delay: u64,
 }
 
@@ -65,18 +65,18 @@ struct Rule {
 
 fn main() -> Result<()> {
     pretty_env_logger::init_custom_env(&format!("{}_LOG", APP_NAME.to_uppercase()));
-    let opt = Opt::from_args();
+    let args = Args::parse();
 
-    check_watch_directory(&opt.watch_dir)?;
+    check_watch_directory(&args.watch_dir)?;
 
     let (config_path, config) = load_or_create_config()?;
     let mut rules = parse_rules(&config)?;
     let (tx, rx) = channel();
 
     // Start watching
-    let watch_delay = Duration::from_secs(opt.watch_delay);
+    let watch_delay = Duration::from_secs(args.watch_delay);
     let _conf_watcher = watch(Sender::clone(&tx), &config_path, watch_delay);
-    let _dir_watcher = watch(tx, &opt.watch_dir, watch_delay);
+    let _dir_watcher = watch(tx, &args.watch_dir, watch_delay);
 
     loop {
         match rx.recv() {
